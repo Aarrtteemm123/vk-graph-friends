@@ -1,6 +1,9 @@
 import io
 import json
+import smtplib
 import time
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 import requests
 from fastapi import FastAPI, Query, Path, BackgroundTasks
@@ -9,6 +12,17 @@ from email_validator import validate_email, EmailNotValidError
 from settings import *
 
 app = FastAPI()
+
+
+def send_email(from_email, to_email, password, message):
+    msg = MIMEMultipart()
+    msg['Subject'] = 'Graph friends result'
+    msg.attach(MIMEText(message, 'html'))
+    server = smtplib.SMTP('smtp.gmail.com: 587')
+    server.starttls()
+    server.login(from_email, password)
+    server.sendmail(from_email, to_email, msg.as_string())
+    server.quit()
 
 def parse_data(user_id):
     s = requests.Session()
