@@ -35,7 +35,24 @@ def parse_friends(user_id):
     res = s.get(f"{BASE_URL}/friends.get?user_id={user_id}&fields=name&access_token={ACCESS_TOKEN}&v={API_VERSION}")
     return res.json()
 
-def build_graph(user_id, accuracy: float=1, email: str=None):
+def process_request(user_id, accuracy: float=1, email: str=None):
+    filename = get_random_filename()
+    graph = build_graph(user_id, accuracy)
+    draw_graph(graph, filename)
+    full_path = f'images/{filename}.png'
+
+    with open(full_path, 'rb') as file:
+        img_data = file.read()
+
+    if os.path.exists(full_path):
+        os.remove(full_path)
+
+    if email is not None:
+        send_email(ADMIN_EMAIL,email,ADMIN_PASSWORD,img_data)
+
+    return img_data
+
+def build_graph(user_id, accuracy: float = 1):
     mg = nx.DiGraph()
     mg.add_node('Main user')
     main_friends = parse_friends(user_id)['response']['items']
@@ -55,29 +72,16 @@ def build_graph(user_id, accuracy: float=1, email: str=None):
             mg.add_node(friend['first_name'] + friend['last_name'])
             mg.add_edge(friend['first_name'] + friend['last_name'], user)
 
-    filename = draw_graph(mg)
-
-    if email is not None:
-        pass
-
-    with open(f'images/{filename}.png','rb') as file:
-        img_data = file.read()
-
-    if os.path.exists(f'images/{filename}.png'):
-        os.remove(f'images/{filename}.png')
-
-    return img_data
+    return mg
 
 def get_random_filename():
-    return str(round(time.time() * (10 ** 6))) + str(random.randint(0, 100000000))
+    return str(round(time.time() * (10 ** 6))) + str(random.randint(0, 10 ** 7))
 
-def draw_graph(g):
-    filename = get_random_filename()
+def draw_graph(g, filename):
     plt.figure(figsize=(30,30))
     nx.draw_random(g, node_size=50, font_size=3, with_labels=True, font_weight='bold')
     plt.savefig(f'images/{filename}.png',dpi=250)
     plt.clf()
-    return filename
 
 @app.get("/")
 async def root():
@@ -88,14 +92,15 @@ async def root():
 @app.get("/graph/user_id={user_id}")
 async def graph(background_tasks: BackgroundTasks,
                       user_id: int = Path(None, title="ID of the Vk user", gt=0),
+                      accuracy: float = Query(1.0, ge=0.0, le=1.0),
                       email: str = Query(None, max_length=50)):
     try:
         if email:
             validate_email(email)
-            background_tasks.add_task(build_graph, user_id, email)
+            background_tasks.add_task(process_request, user_id, accuracy, email)
             return Response(json.dumps({'Answer':'Your request accepted, we will send result to your email'}))
         else:
-            result_img = build_graph(user_id)
+            result_img = process_request(user_id,accuracy)
             return StreamingResponse(result_img, media_type="image/png")
     except EmailNotValidError as e:
         return Response(str(e),status_code=400)
