@@ -1,10 +1,10 @@
 import io
 import json
 import smtplib
-import time
+import networkx as nx
+import matplotlib.pyplot as plt
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-
 import requests
 from fastapi import FastAPI, Query, Path, BackgroundTasks
 from starlette.responses import HTMLResponse, Response, StreamingResponse
@@ -24,17 +24,35 @@ def send_email(from_email, to_email, password, message):
     server.sendmail(from_email, to_email, msg.as_string())
     server.quit()
 
-def parse_data(user_id):
+def parse_friends(user_id):
     s = requests.Session()
     s.proxies = {
-        'http': '192.109.165.139:0080',
-        'https': '85.14.243.31:3128',
+        'https': '139.162.11.25:8888',
+        'http': '80.241.222.138:0080',
     }
     res = s.get(f"{BASE_URL}/friends.get?user_id={user_id}&fields=name&access_token={ACCESS_TOKEN}&v={API_VERSION}")
     return res.json()
 
-def build_graph(user_id, email: str=None):
-    parse_data(user_id)
+def build_graph(user_id, accuracy: float=1, email: str=None):
+    mg = nx.DiGraph()
+    mg.add_node('Main user')
+    main_friends = parse_friends(user_id)['response']['items']
+    friends_of_friend = {}
+    for friend in main_friends:
+        mg.add_node(friend['first_name'] + friend['last_name'])
+        mg.add_edge(friend['first_name'] + friend['last_name'], 'Main user')
+        try:
+            friends_of_friend = parse_friends(friend['id'])['response']['items']
+            print(friends_of_friend)
+            friends_of_friend[friend['first_name'] + friend['last_name']] = friends_of_friend[:int(len(friends_of_friend)*accuracy)]
+        except Exception as e:
+            print(e)
+
+    for user in friends_of_friend:
+        for friend in friends_of_friend[user]:
+            mg.add_node(friend['first_name'] + friend['last_name'])
+            mg.add_edge(friend['first_name'] + friend['last_name'], user)
+
     if email is not None:
         pass
     else:
