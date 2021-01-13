@@ -2,9 +2,26 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Help</title>
 </head>
 <body>
-<h1>Welcome to our API</h1>
+
+<h1>Graph of Vk friends API</h1>
+<hr>
+<h3><p>Parameters:</h3>
+<ul>
+    <li>user_id(int)[required]: User ID in the social network Vk.</li>
+    <li>email(str)[required]: Email where we will send the result. Result it's a high resolution photo and a brief description.</li>
+    <li>accuracy(float)[optional]: Part of the friends of each friend of the main user. Must be in range [0,1].</li>
+</ul>
+<h3><p>Methods: GET</h3>
+<h3>Description: The API analyzes the primary user's friends and each friend's friends and creates a graph.</h3>
+<h3><p>Examples:</h3>
+<ul>
+    <li>http://127.0.0.1:8000/graph/user_id=123456789&email=your_email@gmail.com</li>
+    <li>http://127.0.0.1:8000/graph/user_id=123456789&email=your_email@gmail.com?accuracy=0.2</li>
+</ul>
+<h4>Thank you for attention!</h4>
+
 </body>
 </html>
