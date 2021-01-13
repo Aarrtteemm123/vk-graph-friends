@@ -1,6 +1,9 @@
 import io
 import json
+import os
+import random
 import smtplib
+import time
 import networkx as nx
 import matplotlib.pyplot as plt
 from email.mime.multipart import MIMEMultipart
@@ -12,7 +15,6 @@ from email_validator import validate_email, EmailNotValidError
 from settings import *
 
 app = FastAPI()
-
 
 def send_email(from_email, to_email, password, message):
     msg = MIMEMultipart()
@@ -53,11 +55,29 @@ def build_graph(user_id, accuracy: float=1, email: str=None):
             mg.add_node(friend['first_name'] + friend['last_name'])
             mg.add_edge(friend['first_name'] + friend['last_name'], user)
 
+    filename = draw_graph(mg)
+
     if email is not None:
         pass
-    else:
-        pass
-    return 'ok'
+
+    with open(f'images/{filename}.png','rb') as file:
+        img_data = file.read()
+
+    if os.path.exists(f'images/{filename}.png'):
+        os.remove(f'images/{filename}.png')
+
+    return img_data
+
+def get_random_filename():
+    return str(round(time.time() * (10 ** 6))) + str(random.randint(0, 100000000))
+
+def draw_graph(g):
+    filename = get_random_filename()
+    plt.figure(figsize=(30,30))
+    nx.draw_random(g, node_size=50, font_size=3, with_labels=True, font_weight='bold')
+    plt.savefig(f'images/{filename}.png',dpi=250)
+    plt.clf()
+    return filename
 
 @app.get("/")
 async def root():
@@ -76,7 +96,7 @@ async def graph(background_tasks: BackgroundTasks,
             return Response(json.dumps({'Answer':'Your request accepted, we will send result to your email'}))
         else:
             result_img = build_graph(user_id)
-            return StreamingResponse(io.BytesIO(result_img.tobytes()), media_type="image/png")
+            return StreamingResponse(result_img, media_type="image/png")
     except EmailNotValidError as e:
         return Response(str(e),status_code=400)
     except Exception as e:
