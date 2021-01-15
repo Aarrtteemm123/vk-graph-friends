@@ -1,28 +1,41 @@
-import json, os, random, smtplib, time, requests
-from email.mime.image import MIMEImage
-from email.mime.text import MIMEText
+import json, os, random, time, requests, base64
 import networkx as nx
 import matplotlib.pyplot as plt
-from email.mime.multipart import MIMEMultipart
 from fastapi import FastAPI, Query, Path, BackgroundTasks
+from sendgrid import SendGridAPIClient
 from starlette.responses import HTMLResponse, Response
 from email_validator import validate_email, EmailNotValidError
 from settings import *
+from sendgrid.helpers.mail import *
 
 app = FastAPI()
 
+for file in os.listdir('images'):
+    os.remove(f'images/{file}')
 
-def send_email(from_email, to_email, password, message_data):
-    msg = MIMEMultipart()
-    msg['Subject'] = 'Graph friends result'
-    msg.attach(MIMEImage(message_data['img']))
-    msg.attach(MIMEText(message_data['options']))
-    server = smtplib.SMTP('smtp.gmail.com: 587')
-    server.starttls()
-    server.login(from_email, password)
-    server.sendmail(from_email, to_email, msg.as_string())
-    server.quit()
+def send_email(from_email, to_email, text, img):
+    print('sending email...')
 
+    message = Mail(
+        from_email=from_email,
+        to_emails=to_email,
+        subject='Vk graph friends API result',
+        html_content=f'<strong>{text}</strong>'
+    )
+
+    encoded_file = base64.b64encode(img).decode()
+
+    attachedFile = Attachment(
+        FileContent(encoded_file),
+        FileName('graph.png'),
+        FileType('img/png'),
+        Disposition('attachment')
+    )
+
+    message.attachment = attachedFile
+    sg = SendGridAPIClient(api_key=EMAIL_API_KEY)
+    response = sg.send(message)
+    print(response.status_code, response.body, response.headers)
 
 def parse_friends(user_id):
     res = requests.get(f"{BASE_URL}/friends.get?user_id={user_id}&fields=name&access_token={ACCESS_TOKEN}&v={API_VERSION}")
@@ -41,11 +54,12 @@ def process_request(user_id, accuracy: float=1, email: str=None):
     if os.path.exists(full_path):
         os.remove(full_path)
 
-    data = {'options':f'user id: {user_id}\naccuracy: {accuracy}\nnodes: {len(graph.nodes)}\nedges: {len(graph.edges)}','img':img_data}
-    send_email(ADMIN_EMAIL,email,ADMIN_PASSWORD,data)
+    data = {'options':f'user id: {user_id}, accuracy: {accuracy}, nodes: {len(graph.nodes)}, edges: {len(graph.edges)}','img':img_data}
+    send_email(ADMIN_EMAIL,email,data['options'],data['img'])
 
 
 def build_graph(user_id, accuracy: float = 1):
+    print(f'start parsing (user id={user_id})...')
     mg = nx.DiGraph()
     mg.add_node('Main user')
     main_friends = parse_friends(user_id)['response']['items']
@@ -55,7 +69,6 @@ def build_graph(user_id, accuracy: float = 1):
         mg.add_edge(friend['first_name'] + friend['last_name'], 'Main user')
         try:
             friends_of_friend = parse_friends(friend['id'])['response']['items']
-            print(friends_of_friend)
             friends_of_friend_dict[friend['first_name'] + friend['last_name']] = friends_of_friend[:int(len(friends_of_friend)*accuracy)]
         except Exception as e:
             print(e)
@@ -73,9 +86,10 @@ def get_random_filename():
 
 
 def draw_graph(g, filename):
-    plt.figure(figsize=(30,30))
+    print('drawing graph...')
+    plt.figure(figsize=(26,26))
     nx.draw_random(g, node_size=50, font_size=3, with_labels=True, font_weight='bold')
-    plt.savefig(f'images/{filename}.png',dpi=250)
+    plt.savefig(f'images/{filename}.png',dpi=220)
     plt.clf()
 
 
